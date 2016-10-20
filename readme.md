@@ -1,3 +1,9 @@
+# Differences:
+Designed for finite images vs. infinite images of maps
+Click minimap to teleport
+Drag minimap positioning rectangle
+Zoom on minimap is disabled
+
 # Leaflet.MiniMap
 
 Leaflet.MiniMap is a simple minimap control that you can drop into your leaflet map, and it will create a small map in the corner which shows the same as the main map with a set zoom offset. (By default it is `-5`.)
