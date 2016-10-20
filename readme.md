@@ -1,7 +1,10 @@
 # Differences:
 Designed for finite images vs. infinite images of maps
+
 Click minimap to teleport
+
 Drag minimap positioning rectangle
+
 Zoom on minimap is disabled
 
 # Leaflet.MiniMap
