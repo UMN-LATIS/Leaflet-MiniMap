@@ -51,6 +51,7 @@
 		onAdd: function (map) {
 
 			this._mainMap = map;
+			this.options.centerFixed = this._mainMap.getCenter(); //added so that center will be fixed by default. Disables dragging on minimap, click to teleport on minimap only (NEW)
 
 			// Creating the container and stopping events from spilling through to the main map.
 			this._container = L.DomUtil.create('div', 'leaflet-control-minimap');
@@ -65,9 +66,9 @@
 				zoomControl: false,
 				zoomAnimation: this.options.zoomAnimation,
 				autoToggleDisplay: this.options.autoToggleDisplay,
-				touchZoom: this.options.centerFixed ? 'center' : !this._isZoomLevelFixed(),
-				scrollWheelZoom: this.options.centerFixed ? 'center' : !this._isZoomLevelFixed(),
-				doubleClickZoom: this.options.centerFixed ? 'center' : !this._isZoomLevelFixed(),
+				touchZoom: this.options.centerFixed ? false : !this._isZoomLevelFixed(), //can change 'center' to false to disable all zooming on minimap (NEW)
+				scrollWheelZoom: this.options.centerFixed ? false : !this._isZoomLevelFixed(), //can change 'center' to false to disable all zooming on minimap (NEW)
+				doubleClickZoom: this.options.centerFixed ? false : !this._isZoomLevelFixed(), //can change 'center' to false to disable all zooming on minimap (NEW)
 				boxZoom: !this._isZoomLevelFixed(),
 				crs: map.options.crs
 			};
@@ -94,9 +95,47 @@
 				this._shadowRect = L.rectangle(this._mainMap.getBounds(), this.options.shadowRectOptions).addTo(this._miniMap);
 				this._mainMap.on('moveend', this._onMainMapMoved, this);
 				this._mainMap.on('move', this._onMainMapMoving, this);
-				this._miniMap.on('movestart', this._onMiniMapMoveStarted, this);
-				this._miniMap.on('move', this._onMiniMapMoving, this);
-				this._miniMap.on('moveend', this._onMiniMapMoved, this);
+				
+				//below code allows click to teleport and pseudo aiming rectangle(NEW)
+				var self = this;
+				var isClicking = false;
+				
+				//click to teleport
+				$(this._miniMap._container).on('click', function(event) {
+					self._mainMap.setView({
+						lat: self._miniMap.mouseEventToLatLng(event).lat,
+						lng: self._miniMap.mouseEventToLatLng(event).lng
+					}, self._decideZoom(false));
+				});
+				
+				//psuedo aiming rectangle logic (NEW)
+				$(this._miniMap._container).mousedown(function() {
+					isClicking = true;
+				});
+				
+				$(this._miniMap._container).mouseup(function() {
+					isClicking = false;
+					self._shadowRect.setStyle({opacity: 0, fillOpacity: 0});
+				});
+				
+				$(this._miniMap._container).mousemove(function(event) {
+					if (isClicking) {
+						self._shadowRect.setBounds(new L.LatLngBounds(
+							{
+								//southwest tip of shadowRect
+								lat: self._miniMap.mouseEventToLatLng(event).lat + (self._aimingRect.getBounds().getSouthWest().lat - self._aimingRect.getBounds().getNorthEast().lat) / 2,
+								lng: self._miniMap.mouseEventToLatLng(event).lng + (self._aimingRect.getBounds().getSouthWest().lng - self._aimingRect.getBounds().getNorthEast().lng) / 2
+							},
+							{
+								//northeast tip of shadowRect
+								lat: self._miniMap.mouseEventToLatLng(event).lat + (self._aimingRect.getBounds().getNorthEast().lat - self._aimingRect.getBounds().getSouthWest().lat) / 2,
+								lng: self._miniMap.mouseEventToLatLng(event).lng + (self._aimingRect.getBounds().getNorthEast().lng - self._aimingRect.getBounds().getSouthWest().lng) / 2
+							}
+						));
+						
+						self._shadowRect.setStyle({opacity: 1, fillOpacity: 0.3});
+					}
+				});
 			}, this));
 
 			return this._container;
@@ -222,39 +261,11 @@
 			this._aimingRect.setBounds(this._mainMap.getBounds());
 		},
 
-		_onMiniMapMoveStarted: function (e) {
-			if (!this.options.centerFixed) {
-				var lastAimingRect = this._aimingRect.getBounds();
-				var sw = this._miniMap.latLngToContainerPoint(lastAimingRect.getSouthWest());
-				var ne = this._miniMap.latLngToContainerPoint(lastAimingRect.getNorthEast());
-				this._lastAimingRectPosition = {sw: sw, ne: ne};
-			}
-		},
-
-		_onMiniMapMoving: function (e) {
-			if (!this.options.centerFixed) {
-				if (!this._mainMapMoving && this._lastAimingRectPosition) {
-					this._shadowRect.setBounds(new L.LatLngBounds(this._miniMap.containerPointToLatLng(this._lastAimingRectPosition.sw), this._miniMap.containerPointToLatLng(this._lastAimingRectPosition.ne)));
-					this._shadowRect.setStyle({opacity: 1, fillOpacity: 0.3});
-				}
-			}
-		},
-
-		_onMiniMapMoved: function (e) {
-			if (!this._mainMapMoving) {
-				this._miniMapMoving = true;
-				this._mainMap.setView(this._miniMap.getCenter(), this._decideZoom(false));
-				this._shadowRect.setStyle({opacity: 0, fillOpacity: 0});
-			} else {
-				this._mainMapMoving = false;
-			}
-		},
-
 		_isZoomLevelFixed: function () {
 			var zoomLevelFixed = this.options.zoomLevelFixed;
 			return this._isDefined(zoomLevelFixed) && this._isInteger(zoomLevelFixed);
 		},
-
+        
 		_decideZoom: function (fromMaintoMini) {
 			if (!this._isZoomLevelFixed()) {
 				if (fromMaintoMini) {
